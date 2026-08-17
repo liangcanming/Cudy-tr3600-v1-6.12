@@ -1,4 +1,4 @@
-name: Build Cudy TR3600 OpenWrt with Passwall
+name: Build Cudy TR3600 OpenWrt Amin
 
 on:
   workflow_dispatch:
