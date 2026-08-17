@@ -1,167 +1,194 @@
-name: Build Cudy TR3600 OpenWrt Amin
+name: Build Cudy TR3600 OpenWrt with Passwall
 
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'Release Tag (留空自动生成)'
+      ssh:
+        description: 'SSH connection to Actions'
         required: false
-        default: ''
-        type: string
-      release_title:
-        description: 'Release Title (留空自动生成)'
-        required: false
-        default: ''
-        type: string
+        default: 'false'
+
+# 赋予创建 Release 的权限
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    permissions:
-      contents: write  # 允许创建 Release
-    
+    timeout-minutes: 350
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Free Disk Space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo -E apt-get -qq update
-          sudo -E apt-get -qq install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev file python3
+    - name: Free Disk Space
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev file python3
 
-      - name: Clone Source Code
-        run: |
-          git clone -b agent/cudy-tr3600-v1-6.12 --single-branch --depth=1 https://github.com/soapmancn/openwrt.git openwrt
+    - name: Clone Source Code
+      run: |
+        git clone -b agent/cudy-tr3600-v1-6.12 --single-branch --depth=1 https://github.com/soapmancn/openwrt.git openwrt
 
-      # ============================================
-      # 执行 DIY 脚本（按顺序）
-      # ============================================
-      
-      - name: Execute DIY Scripts
-        run: |
-          cd openwrt
-          
-          # 定义脚本列表（按执行顺序）
-          DIY_SCRIPTS=(
-            "diy-part1.sh"
-            "diy-part2.sh"
-            "diy-partX.sh"
-          )
-          
-          # 遍历执行每个脚本
-          for script in "${DIY_SCRIPTS[@]}"; do
-            if [ -f "../$script" ]; then
-              echo "=========================================="
-              echo "📜 执行脚本: $script"
-              echo "=========================================="
-              cp "../$script" ./
-              chmod +x "$script"
-              ./"$script"
-              echo "✅ $script 执行完成"
-              echo ""
-            else
-              echo "⚠️ 跳过: $script (文件不存在)"
-            fi
-          done
+    # =========================================================
+    # 执行你的 DIY 脚本
+    # =========================================================
+    - name: Execute DIY Scripts
+      run: |
+        cd openwrt
+        
+        # 从环境变量读取脚本列表，按顺序执行
+        for script in ${{ env.DIY_SCRIPTS }}; do
+          if [ -f "../$script" ]; then
+            echo "=========================================="
+            echo "📜 执行脚本: $script"
+            echo "=========================================="
+            cp "../$script" ./
+            chmod +x "$script"
+            ./"$script"
+            echo "✅ $script 执行完成"
+            echo ""
+          else
+            echo "⚠️ 跳过: $script (文件不存在)"
+          fi
+        done
+      env:
+        DIY_SCRIPTS: "diy-part1.sh diy-part2.sh diy-partX.sh"
 
-      - name: Update & Install Feeds
-        run: |
-          cd openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+    - name: Update & Install Feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
-      - name: Generate Config
-        run: |
-          cd openwrt
-          cat <<EOF > .config
-          CONFIG_TARGET_mediatek=y
-          CONFIG_TARGET_mediatek_filogic=y
-          CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cudy_tr3600-v1=y
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-          CONFIG_PACKAGE_luci-app-passwall=y
-          CONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y
-          CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
-          CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=y
-          EOF
-          make defconfig
+    - name: Generate Config
+      run: |
+        cd openwrt
+        cat <<EOF > .config
+        CONFIG_TARGET_mediatek=y
+        CONFIG_TARGET_mediatek_filogic=y
+        CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cudy_tr3600-v1=y
+        CONFIG_PACKAGE_luci=y
+        CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+        CONFIG_PACKAGE_luci-app-passwall=y
+        CONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y
+        CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
+        CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=y
+        EOF
+        make defconfig
 
-      - name: Download Package Dependencies
-        run: |
-          cd openwrt
-          make download -j8
+    - name: Download Package Dependencies
+      run: |
+        cd openwrt
+        make download -j8
 
-      - name: Compile Firmware
-        run: |
-          cd openwrt
-          make -j$(nproc) || make -j1 V=s
+    - name: Compile Firmware
+      id: compile
+      run: |
+        cd openwrt
+        make -j$(nproc) || make -j1 V=s
+        echo "status=success" >> "$GITHUB_OUTPUT"
+        # 生成带时间的文件后缀，供后续步骤使用
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> "$GITHUB_ENV"
 
-      - name: Prepare Firmware Files
-        id: prepare
-        run: |
-          BUILD_DATE=$(date +'%Y%m%d')
-          BUILD_TIME=$(date +'%H%M')
-          DEVICE="Cudy-TR3600"
-          
-          mkdir -p release_files
-          cd openwrt/bin/targets/mediatek/filogic
-          
-          for file in *.bin *.itb *.manifest *.sha256sums; do
-            if [ -f "$file" ]; then
-              ext="${file##*.}"
-              base="${file%.*}"
-              new_name="${DEVICE}_${BUILD_DATE}_${BUILD_TIME}.${ext}"
-              cp "$file" "../../../../release_files/${new_name}"
-              echo "📦 准备文件: ${new_name}"
-            fi
-          done
-          
-          cd ../../../../
-          echo "BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
-          echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_ENV
-          echo "DEVICE=${DEVICE}" >> $GITHUB_ENV
-          
-          echo "📋 已准备的文件:"
-          ls -la release_files/
+    # =========================================================
+    # 整理固件文件，准备发布
+    # =========================================================
+    - name: Organize Firmware Files
+      id: organize
+      if: steps.compile.outputs.status == 'success' && !cancelled()
+      run: |
+        cd openwrt/bin/targets/mediatek/filogic
+        rm -rf packages
+        echo "FIRMWARE_DIR=$PWD" >> "$GITHUB_ENV"
+        echo "status=success" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Firmware to Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Cudy-TR3600-Firmware-${{ env.BUILD_DATE }}
-          path: release_files/*
+    - name: Upload Firmware Directory (Artifact)
+      uses: actions/upload-artifact@v4
+      if: steps.organize.outputs.status == 'success' && !cancelled()
+      with:
+        name: Cudy-TR3600-Firmware${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE_DIR }}
 
-      - name: Create Release and Upload Assets
-        if: success()
-        uses: softprops/action-gh-release@v1
-        with:
-          name: ${{ github.event.inputs.release_title || format('Cudy TR3600 OpenWrt {0}', env.BUILD_DATE) }}
-          tag_name: ${{ github.event.inputs.release_tag || format('v{0}', env.BUILD_DATE) }}
-          body: |
-            ## 🚀 Cudy TR3600 OpenWrt 固件
-            
-            ### 📅 编译信息
-            - **设备**: Cudy TR3600
-            - **编译日期**: ${{ env.BUILD_DATE }}
-            - **编译时间**: ${{ env.BUILD_TIME }}
-            - **源码分支**: agent/cudy-tr3600-v1-6.12
-            
-            ### 📦 包含插件
-            - Passwall (含 Xray & Sing-Box)
-            - 其他自定义插件（根据 diy-part1.sh/2.sh/X.sh）
-            
-            ### 🔧 刷机说明
-            1. 下载对应固件文件
-            2. 通过 Web 界面或 Uboot 刷入
-            3. 默认 IP: 192.168.1.1
-            4. 默认密码: password
-            
-            ---
-            *自动构建于 GitHub Actions*
-          draft: false
-          prerelease: false
-          generate_release_notes: false
-          files: |
-            release_files/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # =========================================================
+    # 生成 Release Tag 和说明
+    # =========================================================
+    - name: Generate Release Tag and Notes
+      id: tag
+      if: success() && !cancelled()
+      run: |
+        DEVICE_NAME="Cudy-TR3600"
+        AUTHOR="soapmancn"
+        BRANCH="agent/cudy-tr3600-v1-6.12"
+        BUILD_TIME=$(date +"%Y%m%d-%H%M")
+
+        # 生成标签：设备名-源码作者-分支-编译时间
+        RELEASE_TAG="${DEVICE_NAME}-${AUTHOR}-${BRANCH}-${BUILD_TIME}"
+        # 清理标签中不合规的字符，只保留字母、数字、点、横线、下划线
+        RELEASE_TAG=$(echo "$RELEASE_TAG" | sed 's/[^a-zA-Z0-9._-]/-/g')
+        echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+
+        # 生成 Release 说明
+        cat <<EOF > release.txt
+        ## 🚀 Cudy TR3600 OpenWrt 固件
+
+        ### 📋 编译信息
+        | 项目 | 详情 |
+        |------|------|
+        | 📱 设备名称 | \`${DEVICE_NAME}\` |
+        | 👤 源码作者 | \`${AUTHOR}\` |
+        | 🔗 源码仓库 | https://github.com/soapmancn/openwrt |
+        | 🌿 分支版本 | \`${BRANCH}\` |
+        | ⏰ 编译时间 | $(date '+%Y-%m-%d %H:%M:%S') (UTC+8) |
+        | 🏷️ 版本标签 | \`${RELEASE_TAG}\` |
+
+        ### 📦 包含插件
+        - Passwall (含 Xray & Sing-Box)
+        - 其他自定义插件（根据你的 diy-part*.sh）
+
+        ### 🔧 刷机说明
+        1. 下载对应固件文件（.bin 或 .itb）
+        2. 通过 Cudy 网页后台或 Uboot 刷入
+        3. 默认 IP: 192.168.1.1
+        4. 默认密码: password
+
+        ---
+        > ⚠️ **注意**: 刷机有风险，请谨慎操作。建议备份原厂固件。
+        EOF
+
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+    # =========================================================
+    # 创建 GitHub Release 并上传固件
+    # =========================================================
+    - name: Create Release and Upload Assets
+      uses: softprops/action-gh-release@v2.3.2
+      if: steps.tag.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        name: Cudy TR3600 OpenWrt ${{ env.FILE_DATE }}
+        body_path: release.txt
+        files: |
+          ${{ env.FIRMWARE_DIR }}/*.bin
+          ${{ env.FIRMWARE_DIR }}/*.itb
+          ${{ env.FIRMWARE_DIR }}/*.manifest
+          ${{ env.FIRMWARE_DIR }}/*.sha256sums
+        draft: false
+        prerelease: false
+
+    # =========================================================
+    # 可选：清理旧的 Releases（保留最近10个）
+    # =========================================================
+    - name: Remove Old Releases
+      uses: dev-drprasad/delete-older-releases@v0.3.4
+      if: success() && !cancelled()
+      with:
+        keep_latest: 10
+        delete_tags: true
+        # 只删除本设备的固件 Release，避免误删其他
+        delete_tag_pattern: '^Cudy-TR3600-'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
