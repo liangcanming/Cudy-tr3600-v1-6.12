@@ -252,13 +252,13 @@ jobs:
         echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
 
         cat <<EOF > release.txt
-        ## 🚀 ${{ env.DEVICE_MODEL }} OpenWrt 固件 (Amin 定制版)
+        ## 🚀 ${{ env.DEVICE_MODEL }} iStore OpenWrt 固件 (Amin 定制版)
 
         ### 📋 编译信息
         | 项目 | 详情 |
         |------|------|
         | 📱 设备型号 | \`${{ env.DEVICE_MODEL }}\` |
-        | 🏷️ 固件标识 | **Amin 定制版** |
+        | 🏷️ 固件标识 | ** iStore Amin 定制版** |
         | 👤 源码作者 | \`${AUTHOR}\` |
         | 🔗 源码仓库 | ${{ env.REPO_URL }} |
         | 🌿 分支版本 | \`${BRANCH}\` |
@@ -287,7 +287,7 @@ jobs:
         - 本固件仅供学习研究使用
 
         ---
-        > 📌 **固件标识**: Amin 定制版 | 构建时间: $(date '+%Y-%m-%d %H:%M:%S')
+        > 📌 **固件标识**:iStore Amin 定制版 | 构建时间: $(date '+%Y-%m-%d %H:%M:%S')
         EOF
 
         echo "status=success" >> "$GITHUB_OUTPUT"
@@ -302,7 +302,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ steps.tag.outputs.release_tag }}
-        name: ${{ env.DEVICE_MODEL }} OpenWrt Amin 定制版 - ${{ env.BUILD_TIMESTAMP }}
+        name: ${{ env.DEVICE_MODEL }} OpenWrt iStore Amin 定制版 - ${{ env.BUILD_TIMESTAMP }}
         body_path: release.txt
         files: |
           ${{ env.FIRMWARE_DIR }}/*.bin
