@@ -38,6 +38,9 @@ git clone --depth=1 https://github.com/QiuSimons/vmlinux-btf.git package/custom/
 # SSR+
 git clone --depth=1 https://github.com/fw876/helloworld.git package/custom/ssrp
 
+# Cudy TR3600 风扇控制插件（新增）
+git clone --depth=1 https://github.com/liangcanming/luci-app-tr3600-fan.git package/custom/luci-app-tr3600-fan
+
 # =========================================================
 # 功能插件（无 Docker）
 # =========================================================
