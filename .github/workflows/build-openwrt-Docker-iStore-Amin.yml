@@ -258,7 +258,7 @@ jobs:
         | 项目 | 详情 |
         |------|------|
         | 📱 设备型号 | \`${{ env.DEVICE_MODEL }}\` |
-        | 🏷️ 固件标识 | **Amin 定制版** |
+        | 🏷️ 固件标识 | **Docker iStore Amin 定制版** |
         | 👤 源码作者 | \`${AUTHOR}\` |
         | 🔗 源码仓库 | ${{ env.REPO_URL }} |
         | 🌿 分支版本 | \`${BRANCH}\` |
@@ -288,7 +288,7 @@ jobs:
         - 本固件仅供学习研究使用
 
         ---
-        > 📌 **固件标识**:  Docker iStore Amin 定制版 | 构建时间: $(date '+%Y-%m-%d %H:%M:%S')
+        > 📌 **固件标识**: Docker iStore Amin 定制版 | 构建时间: $(date '+%Y-%m-%d %H:%M:%S')
         EOF
 
         echo "status=success" >> "$GITHUB_OUTPUT"
