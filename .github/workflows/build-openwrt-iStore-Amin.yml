@@ -1,0 +1,326 @@
+name: Build Cudy TR3600 OpenWrt iStore Amin
+
+on:
+  workflow_dispatch:
+    inputs:
+      ssh:
+        description: 'SSH connection to Actions'
+        required: false
+        default: 'false'
+
+env:
+  DEVICE_NAME: Cudy-TR3600
+  DEVICE_MODEL: Cudy TR3600
+  FIRMWARE_PREFIX: Cudy-TR3600-Amin
+  REPO_URL: https://github.com/soapmancn/openwrt
+  REPO_BRANCH: agent/cudy-tr3600-v1-6.12
+  # 配置文件路径（相对于仓库根目录）
+  CONFIG_FILE: mt7987-cudy-tr3600-iStore.config
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-iStore-part2.sh
+  DIY_P3_SH: diy-partX.sh
+  TZ: Asia/Shanghai
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 350
+
+    steps:
+    # =========================================================
+    # 1. 检出仓库
+    # =========================================================
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # =========================================================
+    # 2. 释放磁盘空间 & 安装依赖
+    # =========================================================
+    - name: Free Disk Space & Install Dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+          /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/lib/jvm
+        sudo docker image prune --all --force
+
+        sudo swapoff -a && sudo rm -f /mnt/swapfile
+        sudo fallocate -l 8G /mnt/swapfile
+        sudo chmod 600 /mnt/swapfile
+        sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile
+
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install -y build-essential libncurses5-dev gawk \
+          git subversion libssl-dev gettext unzip zlib1g-dev file python3 \
+          clang llvm dwarves flex bison dos2unix
+
+        sudo timedatectl set-timezone "$TZ"
+
+        echo "磁盘空间:"
+        df -hT
+        echo "内存/Swap:"
+        free -h
+
+    # =========================================================
+    # 3. 克隆源码
+    # =========================================================
+    - name: Clone Source Code
+      run: |
+        git clone -b "$REPO_BRANCH" --single-branch --depth=1 "$REPO_URL" openwrt
+
+    # =========================================================
+    # 4. 执行 DIY 脚本 (diy-part1.sh)
+    # =========================================================
+    - name: Execute diy-part1.sh
+      run: |
+        cd openwrt
+        if [ -f "../$DIY_P1_SH" ]; then
+          echo "📜 执行脚本: $DIY_P1_SH"
+          cp "../$DIY_P1_SH" ./
+          chmod +x "$DIY_P1_SH"
+          ./"$DIY_P1_SH"
+        else
+          echo "⚠️ 跳过: $DIY_P1_SH (文件不存在)"
+        fi
+
+    # =========================================================
+    # 5. 更新 & 安装 Feeds
+    # =========================================================
+    - name: Update & Install Feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    # =========================================================
+    # 6. 执行 DIY 脚本 (diy-part2.sh)
+    # =========================================================
+    - name: Execute diy-part2.sh
+      run: |
+        cd openwrt
+        if [ -f "../$DIY_P2_SH" ]; then
+          echo "📜 执行脚本: $DIY_P2_SH"
+          cp "../$DIY_P2_SH" ./
+          chmod +x "$DIY_P2_SH"
+          ./"$DIY_P2_SH"
+        else
+          echo "⚠️ 跳过: $DIY_P2_SH (文件不存在)"
+        fi
+
+    # =========================================================
+    # 7. 复制配置文件 (使用 CONFIG_FILE)
+    # =========================================================
+    - name: Copy Config File
+      run: |
+        cd openwrt
+        if [ -f "../$CONFIG_FILE" ]; then
+          echo "📋 使用配置文件: $CONFIG_FILE"
+          cp "../$CONFIG_FILE" .config
+          echo "✅ 配置文件已复制到 .config"
+        else
+          echo "❌ 配置文件不存在: $CONFIG_FILE"
+          exit 1
+        fi
+        # 显示配置摘要
+        echo "========================================"
+        echo "📋 配置摘要:"
+        grep "CONFIG_TARGET_DEVICE" .config || echo "⚠️ 未找到设备配置"
+        grep "CONFIG_PACKAGE_luci-app-passwall" .config || echo "⚠️ 未找到 Passwall 配置"
+        echo "========================================"
+
+    # =========================================================
+    # 8. 生成默认配置
+    # =========================================================
+    - name: Generate Defconfig
+      run: |
+        cd openwrt
+        make defconfig
+        echo "✅ defconfig 生成完成"
+        # 显示最终配置
+        echo "========================================"
+        echo "📋 最终配置摘要:"
+        grep -E "CONFIG_TARGET_DEVICE|CONFIG_PACKAGE_.*passwall|CONFIG_PACKAGE_luci" .config | head -20
+        echo "========================================"
+
+    # =========================================================
+    # 9. 执行 DIY 脚本 (diy-partX.sh)
+    # =========================================================
+    - name: Execute diy-partX.sh
+      run: |
+        cd openwrt
+        if [ -f "../$DIY_P3_SH" ]; then
+          echo "📜 执行脚本: $DIY_P3_SH"
+          cp "../$DIY_P3_SH" ./
+          chmod +x "$DIY_P3_SH"
+          ./"$DIY_P3_SH"
+        else
+          echo "⚠️ 跳过: $DIY_P3_SH (文件不存在)"
+        fi
+
+    # =========================================================
+    # 10. SSH 调试（可选）
+    # =========================================================
+    - name: SSH Debug Session
+      uses: mxschmitt/action-tmate@v3
+      if: github.event.inputs.ssh == 'true'
+
+    # =========================================================
+    # 11. 下载软件包
+    # =========================================================
+    - name: Download Packages
+      run: |
+        cd openwrt
+        make download -j8 || make download -j1 V=s
+        find dl -size -1024c -exec rm -f {} \;
+
+    # =========================================================
+    # 12. 编译固件
+    # =========================================================
+    - name: Compile Firmware
+      id: compile
+      run: |
+        cd openwrt
+        
+        echo "🔨 开始编译... ($(nproc) 线程)"
+        
+        if make -j"$(nproc)"; then
+          echo "✅ 多线程编译成功"
+        elif make -j1; then
+          echo "✅ 单线程编译成功"
+        elif make -j1 V=s; then
+          echo "✅ 单线程详细日志编译成功"
+        else
+          echo "❌ 编译失败"
+          exit 1
+        fi
+        
+        echo "status=success" >> "$GITHUB_OUTPUT"
+        BUILD_TIMESTAMP=$(date +"%Y%m%d-%H%M")
+        echo "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}" >> "$GITHUB_ENV"
+        
+        echo "========================================"
+        echo "✅ 固件编译完成"
+        echo "📅 编译时间: $(date '+%Y-%m-%d %H:%M:%S')"
+        df -hT /
+        echo "========================================"
+
+    # =========================================================
+    # 13. 整理固件文件
+    # =========================================================
+    - name: Organize Firmware Files
+      id: organize
+      if: steps.compile.outputs.status == 'success' && !cancelled()
+      run: |
+        cd openwrt/bin/targets/*/*
+        rm -rf packages
+        echo "FIRMWARE_DIR=$PWD" >> "$GITHUB_ENV"
+        echo "status=success" >> "$GITHUB_OUTPUT"
+        
+        echo "📦 固件文件列表:"
+        ls -lah
+
+    # =========================================================
+    # 14. 上传固件到 Artifacts
+    # =========================================================
+    - name: Upload Firmware to Artifacts
+      uses: actions/upload-artifact@v4
+      if: steps.organize.outputs.status == 'success' && !cancelled()
+      with:
+        name: ${{ env.FIRMWARE_PREFIX }}-Firmware-${{ env.BUILD_TIMESTAMP }}
+        path: ${{ env.FIRMWARE_DIR }}
+
+    # =========================================================
+    # 15. 生成 Release Tag 和说明
+    # =========================================================
+    - name: Generate Release Tag and Notes
+      id: tag
+      if: success() && !cancelled()
+      run: |
+        AUTHOR=$(echo "$REPO_URL" | cut -d'/' -f4)
+        BRANCH="$REPO_BRANCH"
+        BUILD_TIME="$BUILD_TIMESTAMP"
+        DEVICE="$DEVICE_NAME"
+        
+        RELEASE_TAG="${DEVICE}-Amin-${AUTHOR}-${BRANCH}-${BUILD_TIME}"
+        RELEASE_TAG=$(echo "$RELEASE_TAG" | sed 's/[^a-zA-Z0-9._-]/-/g')
+        
+        echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+
+        cat <<EOF > release.txt
+        ## 🚀 ${{ env.DEVICE_MODEL }} OpenWrt 固件 (Amin 定制版)
+
+        ### 📋 编译信息
+        | 项目 | 详情 |
+        |------|------|
+        | 📱 设备型号 | \`${{ env.DEVICE_MODEL }}\` |
+        | 🏷️ 固件标识 | **Amin 定制版** |
+        | 👤 源码作者 | \`${AUTHOR}\` |
+        | 🔗 源码仓库 | ${{ env.REPO_URL }} |
+        | 🌿 分支版本 | \`${BRANCH}\` |
+        | ⏰ 编译时间 | $(date '+%Y-%m-%d %H:%M:%S') (Asia/Shanghai) |
+        | 🏷️ 版本标签 | \`${RELEASE_TAG}\` |
+        | 📄 配置文件 | \`${{ env.CONFIG_FILE }}\` |
+
+        ### 📦 包含插件
+        - ✅ **Passwall** (含 Xray & Sing-Box 支持)
+        - ✅ **Passwall2**
+        - ✅ **OpenClash**
+        - ✅ **LuCI** 中文界面
+        - ✅ **2.5G 网卡驱动** (RTL8221)
+        - ✅ **Cudy TR3600 风扇控制**
+        - ✅ **iStore** 应用商店**
+
+        ### 🔧 刷机指南
+        1. 下载对应固件文件
+        2. 通过 Cudy 网页后台或 Uboot 刷入
+        3. 默认 IP: \`192.168.1.1\`
+        4. 默认密码: \`password\`
+
+        ### ⚠️ 免责声明
+        - 刷机有风险，请谨慎操作
+        - 建议刷机前备份原厂固件
+        - 本固件仅供学习研究使用
+
+        ---
+        > 📌 **固件标识**: Amin 定制版 | 构建时间: $(date '+%Y-%m-%d %H:%M:%S')
+        EOF
+
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+    # =========================================================
+    # 16. 创建 GitHub Release 并上传固件
+    # =========================================================
+    - name: Create Release and Upload Assets
+      uses: softprops/action-gh-release@v2.3.2
+      if: steps.tag.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        name: ${{ env.DEVICE_MODEL }} OpenWrt Amin 定制版 - ${{ env.BUILD_TIMESTAMP }}
+        body_path: release.txt
+        files: |
+          ${{ env.FIRMWARE_DIR }}/*.bin
+          ${{ env.FIRMWARE_DIR }}/*.itb
+          ${{ env.FIRMWARE_DIR }}/*.manifest
+          ${{ env.FIRMWARE_DIR }}/*.sha256sums
+        draft: false
+        prerelease: false
+
+    # =========================================================
+    # 17. 清理旧的 Releases（保留最近 10 个）
+    # =========================================================
+    - name: Remove Old Releases
+      uses: dev-drprasad/delete-older-releases@v0.3.4
+      if: success() && !cancelled()
+      with:
+        keep_latest: 10
+        delete_tags: true
+        delete_tag_pattern: '^${{ env.DEVICE_NAME }}-Amin-'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
