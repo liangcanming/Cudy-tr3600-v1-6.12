@@ -15,9 +15,9 @@ env:
   REPO_URL: https://github.com/soapmancn/openwrt
   REPO_BRANCH: agent/cudy-tr3600-v1-6.12
   # 配置文件路径（相对于仓库根目录）
-  CONFIG_FILE: DIY-Docker/mt7987-cudy-tr3600.config
-  DIY_P1_SH: DIY-Docker/diy-part1.sh
-  DIY_P2_SH: DIY-Docker/diy-part2.sh
+  CONFIG_FILE: mt7987-cudy-tr3600-docker.config
+  DIY_P1_SH: diy-docker-part1.sh
+  DIY_P2_SH: diy-docker-part2.sh
   DIY_P3_SH: diy-partX.sh
   TZ: Asia/Shanghai
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -74,9 +74,9 @@ jobs:
         git clone -b "$REPO_BRANCH" --single-branch --depth=1 "$REPO_URL" openwrt
 
     # =========================================================
-    # 4. 执行 DIY 脚本 (diy-part1.sh)
+    # 4. 执行 DIY 脚本 (diy-docker-part1.sh)
     # =========================================================
-    - name: Execute diy-part1.sh
+    - name: Execute diy-docker-part1.sh
       run: |
         cd openwrt
         if [ -f "../$DIY_P1_SH" ]; then
@@ -98,9 +98,9 @@ jobs:
         ./scripts/feeds install -a
 
     # =========================================================
-    # 6. 执行 DIY 脚本 (diy-part2.sh)
+    # 6. 执行 DIY 脚本 (diy-docker-part2.sh)
     # =========================================================
-    - name: Execute diy-part2.sh
+    - name: Execute diy-docker-part2.sh
       run: |
         cd openwrt
         if [ -f "../$DIY_P2_SH" ]; then

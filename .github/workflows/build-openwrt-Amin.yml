@@ -15,9 +15,9 @@ env:
   REPO_URL: https://github.com/soapmancn/openwrt
   REPO_BRANCH: agent/cudy-tr3600-v1-6.12
   # 配置文件路径（相对于仓库根目录）
-  CONFIG_FILE: DIY/mt7987-cudy-tr3600.config
-  DIY_P1_SH: DIY/diy-part1.sh
-  DIY_P2_SH: DIY/diy-part2.sh
+  CONFIG_FILE: mt7987-cudy-tr3600.config
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
   DIY_P3_SH: diy-partX.sh
   TZ: Asia/Shanghai
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
