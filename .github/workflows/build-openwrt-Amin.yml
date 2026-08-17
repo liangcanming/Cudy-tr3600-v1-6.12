@@ -271,7 +271,6 @@ jobs:
         - ✅ **Passwall2**
         - ✅ **OpenClash**
         - ✅ **LuCI** 中文界面
-        - ✅ **Docker** 支持
         - ✅ **2.5G 网卡驱动** (RTL8221)
 
         ### 🔧 刷机指南
