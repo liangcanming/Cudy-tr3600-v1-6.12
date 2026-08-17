@@ -98,9 +98,9 @@ jobs:
         ./scripts/feeds install -a
 
     # =========================================================
-    # 6. 执行 DIY 脚本 (diy-docker-part2.sh)
+    # 6. 执行 DIY 脚本 (diy-docker-iStore-part2.sh)
     # =========================================================
-    - name: Execute diy-docker-part2.sh
+    - name: Execute diy-docker-iStore-part2.sh
       run: |
         cd openwrt
         if [ -f "../$DIY_P2_SH" ]; then
