@@ -27,4 +27,10 @@
 # 修改默认时区（可选）
 # =========================================================
 
+# 设置默认LuCI主题为argon
+sed -i 's/luci.main.theme=bootstrap/luci.main.theme=argon/' package/base-files/files/etc/config/luci
+# 备份兼容写法，防止上面没匹配到
+echo "uci set luci.main.theme='argon'" >> package/base-files/files/etc/uci-defaults/99-default-theme
+echo "uci commit luci" >> package/base-files/files/etc/uci-defaults/99-default-theme
+
 #
