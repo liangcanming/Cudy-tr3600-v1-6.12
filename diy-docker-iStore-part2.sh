@@ -178,8 +178,8 @@ SYSCTL
 
 echo "✅ 网络优化参数已写入"
 
-# 修改默认 IP (192.168.30.1)
-sed -i 's/192.168.6.1/192.168.30.1/g' package/base-files/files/bin/config_generate
+# 将默认 IP 从 192.168.1.1 改为 192.168.6.1
+sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
 
 echo "✅ SSH2 配置完成。"
 
@@ -189,3 +189,9 @@ echo "✅ SSH2 配置完成。"
 
 echo "📦 添加 iStore 源..."
 echo "src-git istore https://github.com/linkease/istore;main" >> feeds.conf.default
+
+# 设置默认LuCI主题为argon
+sed -i 's/luci.main.theme=bootstrap/luci.main.theme=argon/' package/base-files/files/etc/config/luci
+# 备份兼容写法，防止上面没匹配到
+echo "uci set luci.main.theme='argon'" >> package/base-files/files/etc/uci-defaults/99-default-theme
+echo "uci commit luci" >> package/base-files/files/etc/uci-defaults/99-default-theme
