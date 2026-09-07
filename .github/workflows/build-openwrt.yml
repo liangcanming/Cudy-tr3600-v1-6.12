@@ -18,23 +18,22 @@ jobs:
 
       - name: Clone Source Code
         run: |
-          # 仅拉取包含 TR3600 硬件支持的开发者分支，它本身已自带 Passwall 源
+          # Pull the developer branch that contains Cudy TR3600 v1 support.
           git clone -b agent/cudy-tr3600-v1-6.12 --single-branch https://github.com/soapmancn/openwrt.git openwrt
 
       - name: Update & Install Feeds
         run: |
           cd openwrt
-          # 直接更新并安装内置软件源，不再画蛇添足强行外挂
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       - name: Generate Config
         run: |
           cd openwrt
-          cat <<EOF > .config
+          cat <<'EOF' > .config
           CONFIG_TARGET_mediatek=y
           CONFIG_TARGET_mediatek_filogic=y
-          CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_cudy_tr3600-v1=y
+          CONFIG_TARGET_mediatek_filogic_DEVICE_cudy_tr3600-v1=y
           CONFIG_PACKAGE_luci=y
           CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
           CONFIG_PACKAGE_luci-app-passwall=y
@@ -43,6 +42,9 @@ jobs:
           CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=y
           EOF
           make defconfig
+          echo '=== Selected target ==='
+          grep '^CONFIG_TARGET_mediatek_filogic_DEVICE_.*=y' .config || true
+          grep -q '^CONFIG_TARGET_mediatek_filogic_DEVICE_cudy_tr3600-v1=y$' .config
 
       - name: Download Package Dependencies
         run: |
@@ -54,9 +56,19 @@ jobs:
           cd openwrt
           make -j$(nproc) || make -j1 V=s
 
+      - name: Verify TR3600 Firmware
+        run: |
+          cd openwrt
+          echo '=== TR3600 build outputs ==='
+          ls -lh bin/targets/mediatek/filogic/*cudy_tr3600-v1*
+          test -n "$(find bin/targets/mediatek/filogic -maxdepth 1 -type f -name '*cudy_tr3600-v1*sysupgrade*' -print -quit)"
+
       - name: Upload Firmware to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Cudy-TR3600-Firmware
-          # 放宽路径限制，抓取生成的所有文件
-          path: openwrt/bin/targets/mediatek/filogic/*
+          path: |
+            openwrt/bin/targets/mediatek/filogic/*cudy_tr3600-v1*
+            openwrt/bin/targets/mediatek/filogic/sha256sums
+            openwrt/bin/targets/mediatek/filogic/profiles.json
+          if-no-files-found: error
